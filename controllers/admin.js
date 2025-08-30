@@ -2,17 +2,6 @@ const { validationResult } = require('express-validator');
 
 const Resource = require('../models/resource');
 
-exports.getAddResource = (req, res, next) => {
-    res.render('admin/edit-resource', {
-        pageTitle: 'Add Resource',
-        path: '/admin/add-resource',
-        editing: false,
-        hasError: false,
-        errorMessage: null,
-        validationErrors: []
-    });
-};
-
 exports.postAddResource = (req, res, next) => {
     const title = req.body.title;
     const author = req.body.author;
@@ -20,20 +9,10 @@ exports.postAddResource = (req, res, next) => {
     const genre = req.body.genre;
     const errors = validationResult(req);
 
-    if(!errors.isEmpty()) {
-        return res.render('admin/edit-resource', {
-            pageTitle: 'Add Resource',
-            path: '/admin/add-resource',
-            editing: false,
-            resource: {
-                title,
-                author,
-                publicationYear,
-                genre
-            },
-            hasError: true,
-            errorMessage: errors.array()[0].msg,
-            validationErrors: errors.array()
+    if (!errors.isEmpty()) {
+        return res.status(422).json({
+            message: 'Validation failed.',
+            errors: errors.array()
         });
     }
 
@@ -41,7 +20,7 @@ exports.postAddResource = (req, res, next) => {
     resource.save()
     .then(result => {
         console.log('New Resource Created!');
-        res.redirect('/admin/resources');
+        res.status(201).json({ message: 'Resource created successfully', resource: result });
     })
     .catch(err => {
         const error = new Error(err);
@@ -72,70 +51,59 @@ exports.getResources = (req, res, next) => {
     });
 };
 
-exports.getEditResource = (req, res, next) => {
-    const editMode = req.query.edit;
-    if(!editMode) {
-        res.redirect('/');
-    }
-    const resourceId = req.params.resourceId;
+exports.getResourceById = (req, res, next) => {
+  const resourceId = req.params.resourceId;
 
-    Resource.findById(resourceId)
+  Resource.findById(resourceId)
     .then(resource => {
-        res.render('admin/edit-resource', {
-            pageTitle: 'Edit Resource',
-            path: '/admin/edit-resource',
-            resource: resource,
-            editing: editMode,
-            hasError: false,
-            errorMessage: null,
-            validationErrors: []
-        });
+      if (!resource) {
+        return res.status(404).json({ message: 'Resource not found.' });
+      }
+
+      if (resource.userId.toString() !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Not authorized.' });
+      }
+
+      res.status(200).json(resource);
     })
     .catch(err => {
-        const error = new Error(err);
-        error.httpStatusCode = 500;
-        return next(error);
+      console.error(err);
+      res.status(500).json({ message: 'Fetching resource failed.' });
     });
 };
 
-exports.postEditResource = (req, res, next) => {
-    const resourceId = req.body.resourceId;
+
+exports.putEditResource = (req, res, next) => {
+    const resourceId = req.params.resourceId || req.query.resourceId;
     const title = req.body.title;
     const author = req.body.author;
     const publicationYear = req.body.year;
     const genre = req.body.genre;
-    const availableStatus = req.body.availableStatus;
+    const availableStatus = req.body.availableStatus || true;
     const errors = validationResult(req);
 
-    if(!errors.isEmpty()) {
-        return res.render('admin/edit-resource', {
-            pageTitle: 'Edit Resource',
-            path: '/admin/edit-resource',
-            editing: true,
-            resource: {
-                title,
-                author,
-                publicationYear,
-                genre,
-                _id: resourceId,
-                availableStatus
-            },
-            hasError: true,
-            errorMessage: errors.array()[0].msg,
-            validationErrors: errors.array()
+     if (!errors.isEmpty()) {
+        return res.status(422).json({
+            message: 'Validation failed.',
+            errors: errors.array()
         });
     }
 
     Resource.findById(resourceId)
     .then(resource => {
-        if (resource.userId.toString() !== req.user._id.toString()) {
-            return res.redirect('/');
+        if (!resource) {
+            return res.status(404).json({ message: 'Resource not found.' });
         }
+
+        if (resource.userId.toString() !== req.user._id.toString()) {
+            return res.status(403).json({ message: 'Not authorized.' });
+        }
+
         const newResource = new Resource(title, author, publicationYear, genre, resourceId, req.user._id, availableStatus);
         return newResource.save()
         .then(result => {
             console.log('updated resource');
-            res.redirect('/admin/resources');
+            res.status(200).json({ message: 'Resource updated successfully', resource: result });
         })
         .catch(err => {
             const error = new Error(err);
