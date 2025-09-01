@@ -221,8 +221,8 @@ exports.getInvoice = (req, res, next) => {
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'inline; filename="' + invoiceName + '"');
         const pdfDoc = new PDFDocument({ margin: 50 });
-        pdfDoc.pipe(fs.createWriteStream(invoicePath));
         pdfDoc.pipe(res);
+        pdfDoc.pipe(fs.createWriteStream(invoicePath));
 
 
         // 📄 Write multiple lines into the PDF
